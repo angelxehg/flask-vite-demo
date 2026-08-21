@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Contact – Flask Vite Demo{% endblock %}
+
+{% block content %}
+  <h1>Contact</h1>
+  {% if submitted_name %}
+    <p>Thanks, {{ submitted_name }} — we'll be in touch.</p>
+  {% endif %}
+  <form method="post">
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" required>
+    <button type="submit">Submit</button>
+  </form>
+{% endblock %}

@@ -1,2 +1,5 @@
+from flask_vite_demo.app import create_app
+
+
 def main() -> None:
-    print("Hello from flask-vite-demo!")
+    create_app().run(debug=True)
