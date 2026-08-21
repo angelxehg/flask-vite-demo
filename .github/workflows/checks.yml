@@ -1,9 +1,6 @@
 name: Checks
 
 on:
-  push: # TODO: remove once working fine!
-    branches:
-      - main
   pull_request:
     branches:
       - main
