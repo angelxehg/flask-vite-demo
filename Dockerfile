@@ -15,6 +15,6 @@ RUN uv sync --frozen --no-install-project --no-dev
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
-EXPOSE 5000
+EXPOSE 8000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "flask_vite_demo.app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "flask_vite_demo.app:create_app()"]
