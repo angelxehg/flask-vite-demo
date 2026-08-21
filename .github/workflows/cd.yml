@@ -13,13 +13,23 @@ jobs:
   build-and-push:
     name: Build and Push
     runs-on: ubuntu-24.04-arm
+    # This repository is public, so its run logs are world-readable and `vars.*`
+    # are printed verbatim — only `secrets.*` are redacted. The registry
+    # hostname embeds the AWS account ID and is a secret; the repository path
+    # does not and stays a variable, so pushes still log a readable
+    # ***/angelxehg/flask-vite-demo:sha-<sha>.
+    env:
+      IMAGE: ${{ secrets.APP_ECR_REGISTRY }}/${{ vars.APP_ECR_REPOSITORY_NAME }}
     steps:
       - uses: actions/checkout@v7
       - uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ vars.CD_ROLE_ARN }}
+          role-to-assume: ${{ secrets.CD_ROLE_ARN }}
           role-session-name: cd-github-actions-${{ github.event.repository.name }}
           aws-region: ${{ vars.AWS_REGION }}
+          # Defaults to false. Registers the account ID as a masked value, so a
+          # stray occurrence anywhere later in the log is redacted too.
+          mask-aws-account-id: true
       - uses: aws-actions/amazon-ecr-login@v2
       - uses: docker/setup-buildx-action@v4
 
@@ -31,7 +41,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ vars.APP_ECR_REPOSITORY_URI }}:sha-${{ github.sha }}
-            ${{ vars.APP_ECR_REPOSITORY_URI }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+            ${{ env.IMAGE }}:${{ github.ref_name }}
 
 # TODO: Call infra to deploy new version
