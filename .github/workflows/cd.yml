@@ -44,4 +44,50 @@ jobs:
             ${{ env.IMAGE }}:sha-${{ github.sha }}
             ${{ env.IMAGE }}:${{ github.ref_name }}
 
-# TODO: Call infra to deploy new version
+  # The deploy itself runs in the private infra repository, which is why this asks
+  # for one rather than performing it: a reusable workflow would run here and print
+  # every deploy step into a public log. No GitHub credential is involved — the same
+  # AWS role that pushed the image invokes a Lambda that holds the token, sets a
+  # `deploy/prod` status on this commit, and starts the deploy. Watch that status,
+  # not this job, for the outcome.
+  request-deploy:
+    name: Request Deploy
+    needs: build-and-push
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.CD_ROLE_ARN }}
+          role-session-name: cd-github-actions-${{ github.event.repository.name }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Request deploy
+        env:
+          # There is one environment today. The broker takes it as a field so that
+          # stays true when there are two.
+          ENVIRONMENT: prod
+          FUNCTION: ${{ vars.CD_DISPATCH_FUNCTION }}
+          APP: ${{ github.event.repository.name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          payload=$(jq -nc \
+            --arg app "$APP" \
+            --arg environment "$ENVIRONMENT" \
+            --arg tag "sha-$COMMIT_SHA" \
+            --arg sha "$COMMIT_SHA" \
+            '{app:$app, environment:$environment, image_tag:$tag, commit_sha:$sha}')
+
+          aws lambda invoke --function-name "$FUNCTION" \
+            --cli-binary-format raw-in-base64-out \
+            --payload "$payload" response.json > invoke.json
+
+          cat response.json
+
+          # invoke exits 0 even when the function raised; FunctionError is the check
+          test -z "$(jq -r '.FunctionError // empty' invoke.json)"
