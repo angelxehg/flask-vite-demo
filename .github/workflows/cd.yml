@@ -33,6 +33,31 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
       - uses: docker/setup-buildx-action@v4
 
+      # Extracts the frontend-build stage's output (not the final image) so the
+      # exact hashed files that end up in the CDN bucket are byte-identical to
+      # what the shipped image's manifest references — same build-args, same
+      # content hashes. The manifest itself (.vite/*) stays out of the bucket:
+      # it's only needed inside the image to resolve entry names to filenames.
+      - name: Build frontend assets for CDN
+        run: |
+          docker buildx build \
+            --target assets \
+            --build-arg VITE_BASE_PATH=/${{ vars.AWS_S3_PREFIX }}/ \
+            --cache-from type=gha,scope=frontend-build \
+            --cache-to type=gha,mode=max,scope=frontend-build \
+            --output type=local,dest=./frontend-dist \
+            .
+
+      # No CloudFront invalidation: the CD role has no permission to request
+      # one, by design (see infra docs/Pipelines.md). Every asset filename is
+      # content-hashed, so a deploy publishes new keys instead of overwriting
+      # ones that might already be cached.
+      - name: Sync assets to CDN bucket
+        run: |
+          aws s3 sync ./frontend-dist "s3://${{ vars.AWS_S3_BUCKET }}/${{ vars.AWS_S3_PREFIX }}/" \
+            --exclude ".vite/*" \
+            --cache-control "public, max-age=31536000, immutable"
+
       - name: Build and push app image
         uses: docker/build-push-action@v7
         with:
@@ -40,6 +65,11 @@ jobs:
           # target: app
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            STATIC_URL=${{ vars.STATIC_URL }}
+            VITE_BASE_PATH=/${{ vars.AWS_S3_PREFIX }}/
+          cache-from: type=gha,scope=frontend-build
+          cache-to: type=gha,mode=max,scope=frontend-build
           tags: |
             ${{ env.IMAGE }}:sha-${{ github.sha }}
             ${{ env.IMAGE }}:${{ github.ref_name }}
