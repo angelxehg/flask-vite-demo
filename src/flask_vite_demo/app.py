@@ -1,8 +1,11 @@
 from flask import Flask, render_template, request
 
+from flask_vite_demo.core import init_csp
+
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    init_csp(app)
 
     @app.route("/")
     def home():
