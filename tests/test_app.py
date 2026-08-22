@@ -53,14 +53,15 @@ def test_csp_is_self_only_when_static_url_unset(client, monkeypatch):
         "worker-src",
     ],
 )
-def test_csp_includes_cdn_origin_when_static_url_set(
-    client, monkeypatch, directive_name
-):
+def test_csp_scopes_cdn_source_to_this_apps_prefix(client, monkeypatch, directive_name):
     monkeypatch.setenv(
         "STATIC_URL", "https://static.angelxehg.com/flask-vite-demo/prod/"
     )
     policy = client.get("/").headers["Content-Security-Policy"]
-    assert "https://static.angelxehg.com" in _directive(policy, directive_name)
+    assert (
+        _directive(policy, directive_name)
+        == f"{directive_name} 'self' https://static.angelxehg.com/flask-vite-demo/prod/"
+    )
 
 
 def test_csp_never_allows_arbitrary_third_party_origin(client, monkeypatch):
@@ -68,6 +69,17 @@ def test_csp_never_allows_arbitrary_third_party_origin(client, monkeypatch):
         "STATIC_URL", "https://static.angelxehg.com/flask-vite-demo/prod/"
     )
     assert "evil.example" not in client.get("/").headers["Content-Security-Policy"]
+
+
+def test_csp_source_scoping_survives_a_missing_trailing_slash(client, monkeypatch):
+    monkeypatch.setenv(
+        "STATIC_URL", "https://static.angelxehg.com/flask-vite-demo/prod"
+    )
+    policy = client.get("/").headers["Content-Security-Policy"]
+    assert (
+        _directive(policy, "script-src")
+        == "script-src 'self' https://static.angelxehg.com/flask-vite-demo/prod/"
+    )
 
 
 def test_home_no_longer_references_external_cdn_script(client):
