@@ -1,24 +1,21 @@
 from flask import Flask, Response
 
-
-CONTENT_SECURITY_POLICY = "; ".join(
-    (
-        "default-src 'self'",
-        "script-src 'self'",
-        "script-src-attr 'none'",
-        "style-src 'self'",
-        "style-src-attr 'none'",
-        "img-src 'self'",
-        "font-src 'self'",
-        "media-src 'self'",
-        "connect-src 'self'",
-        "manifest-src 'self'",
-        "worker-src 'self'",
-        "base-uri 'none'",
-        "object-src 'none'",
-        "frame-ancestors 'none'",
-        "form-action 'self'",
-    )
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "script-src-attr 'none'; "
+    "style-src 'self'; "
+    "style-src-attr 'none'; "
+    "img-src 'self'; "
+    "font-src 'self'; "
+    "media-src 'self'; "
+    "connect-src 'self'; "
+    "manifest-src 'self'; "
+    "worker-src 'self'; "
+    "base-uri 'none'; "
+    "object-src 'none'; "
+    "frame-ancestors 'none'; "
+    "form-action 'self'"
 )
 
 
