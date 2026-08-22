@@ -1,0 +1,15 @@
+{
+  "name": "flask-vite-demo-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  },
+  "volta": {
+    "node": "24.19.0"
+  }
+}

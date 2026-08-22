@@ -29,9 +29,11 @@ dev = [
 
 [tool.black]
 target-version = ["py39"]
+extend-exclude = "frontend"
 
 [tool.ruff]
 target-version = "py39"
+extend-exclude = ["frontend"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
