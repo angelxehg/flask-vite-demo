@@ -4,7 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Flask Vite Demo{% endblock %}</title>
+  {# Without this a browser asks for /favicon.ico on its own and gets a 404. The
+     redirect route in app.py covers the ones that ask anyway. #}
+  <link rel="icon" type="image/svg+xml" href="{{ static_url('favicon.svg') }}">
   <link rel="stylesheet" href="{{ asset_url('src/main.css') }}">
+  {% block head %}{% endblock %}
 </head>
 <body>
   <nav>

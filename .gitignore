@@ -4,10 +4,18 @@ __pycache__/
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
+
+# Tool caches. Each of these writes a self-ignoring .gitignore of its own, so
+# they stay out of a commit either way -- but only by accident of the tool.
+.pytest_cache/
+.ruff_cache/
 
 # Virtual environments
 .venv
 
 # Node
 node_modules/
+
+# macOS
+.DS_Store
