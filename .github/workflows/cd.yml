@@ -49,20 +49,32 @@ jobs:
             .
 
       # No CloudFront invalidation: the CD role has no permission to request
-      # one, by design (see infra docs/Pipelines.md). Every asset filename is
-      # content-hashed, so a deploy publishes new keys instead of overwriting
-      # ones that might already be cached.
-      - name: Sync assets to CDN bucket
+      # one, by design (see infra docs/Pipelines.md). Every asset filename under
+      # assets/ is content-hashed, so a deploy publishes new keys instead of
+      # overwriting ones that might already be cached.
+      #
+      # Two syncs, because those two sentences are only true of assets/. Files
+      # copied out of frontend/public/ keep their own names forever -- favicon.svg
+      # is the same key today and after the next deploy -- so uploading them
+      # `immutable` for a year would mean a wrong one could never be corrected,
+      # with no invalidation available to force it. An hour is long enough to be
+      # a cache and short enough to be fixable.
+      - name: Sync unhashed public files to CDN bucket
         run: |
           aws s3 sync ./frontend-dist "s3://${{ vars.AWS_S3_BUCKET }}/${{ vars.AWS_S3_PREFIX }}/" \
             --exclude ".vite/*" \
+            --exclude "assets/*" \
+            --cache-control "public, max-age=3600"
+
+      - name: Sync hashed assets to CDN bucket
+        run: |
+          aws s3 sync ./frontend-dist/assets "s3://${{ vars.AWS_S3_BUCKET }}/${{ vars.AWS_S3_PREFIX }}/assets/" \
             --cache-control "public, max-age=31536000, immutable"
 
       - name: Build and push app image
         uses: docker/build-push-action@v7
         with:
           context: .
-          # target: app
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
