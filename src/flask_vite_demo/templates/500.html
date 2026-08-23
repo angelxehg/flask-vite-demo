@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block title %}Something broke – Flask Vite Demo{% endblock %}
+
+{% block content %}
+  <h1>Something broke</h1>
+  <p>That is this application's fault, not yours. Try
+    <a href="{{ url_for('home') }}">the home page</a>.</p>
+{% endblock %}

@@ -84,3 +84,46 @@ def test_csp_source_scoping_survives_a_missing_trailing_slash(client, monkeypatc
 
 def test_home_no_longer_references_external_cdn_script(client):
     assert b"unpkg.com" not in client.get("/").data
+
+
+CDN = "https://static.angelxehg.com/flask-vite-demo/prod/"
+
+
+def test_favicon_link_is_rendered_in_the_head(client):
+    assert b'rel="icon"' in client.get("/").data
+
+
+def test_favicon_ico_redirects_instead_of_404ing(client):
+    """The browser asks for this path on its own, link tag or not."""
+    response = client.get("/favicon.ico")
+    assert response.status_code in (301, 302, 308)
+    assert "favicon.svg" in response.headers["Location"]
+
+
+def test_static_url_serves_from_the_cdn_when_one_is_configured(client, monkeypatch):
+    monkeypatch.setenv("STATIC_URL", CDN)
+    assert (CDN + "favicon.svg").encode() in client.get("/").data
+
+
+def test_static_url_falls_back_to_flask_when_no_cdn_is_configured(client, monkeypatch):
+    """Vite copies public/ into the same dist/ everything else builds into."""
+    monkeypatch.delenv("STATIC_URL", raising=False)
+    assert b"/static/dist/favicon.svg" in client.get("/").data
+
+
+def test_the_icon_is_allowed_by_the_content_security_policy(client, monkeypatch):
+    """img-src governs a rel=icon link, and it already scopes to this prefix."""
+    monkeypatch.setenv("STATIC_URL", CDN)
+    policy = client.get("/").headers["Content-Security-Policy"]
+    assert _directive(policy, "img-src") == f"img-src 'self' {CDN}"
+
+
+def test_unknown_path_renders_the_sites_own_404(client):
+    response = client.get("/no-such-page")
+    assert response.status_code == 404
+    assert b"Not found" in response.data
+    # The site shell, not Werkzeug's default page.
+    assert b"<nav>" in response.data
+    assert response.headers["Content-Security-Policy"] == (
+        build_content_security_policy()
+    )

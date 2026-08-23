@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+
+{% block title %}Not found – Flask Vite Demo{% endblock %}
+
+{% block content %}
+  <h1>Not found</h1>
+  <p>There is nothing at this address. Try <a href="{{ url_for('home') }}">the home page</a>.</p>
+{% endblock %}

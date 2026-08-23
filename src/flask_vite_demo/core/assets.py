@@ -23,7 +23,16 @@ def _load_manifest() -> dict:
         return {}
 
 
+def _resolve(rel_path: str) -> str:
+    """Where a built file lives: the CDN when one is configured, else Flask."""
+    static_url = os.environ.get("STATIC_URL", "").strip()
+    if static_url:
+        return static_url.rstrip("/") + "/" + rel_path
+    return url_for("static", filename=f"dist/{rel_path}")
+
+
 def asset_url(entry: str) -> str:
+    """The built URL for a Vite entry, looked up by its manifest key."""
     manifest = _load_manifest()
     try:
         rel_path = manifest[entry]["file"]
@@ -32,11 +41,25 @@ def asset_url(entry: str) -> str:
             f"No Vite manifest entry for {entry!r}; run `npm run build` in frontend/."
         ) from None
 
-    static_url = os.environ.get("STATIC_URL", "").strip()
-    if static_url:
-        return static_url.rstrip("/") + "/" + rel_path
-    return url_for("static", filename=f"dist/{rel_path}")
+    return _resolve(rel_path)
+
+
+def static_url(path: str) -> str:
+    """The URL for a file Vite copies verbatim out of ``frontend/public/``.
+
+    Those files never enter the manifest -- Vite copies them to the output root
+    untouched and unhashed -- so ``asset_url`` cannot find them and would raise.
+    They still land in the same place everything else does, which is why this
+    shares ``_resolve``: the CDN when STATIC_URL is set, Flask's own static
+    directory otherwise.
+
+    Being unhashed is the trade. It buys a stable URL for the well-known files
+    that need one, and it costs the ability to cache them forever -- see the
+    Cache-Control split in .github/workflows/cd.yml.
+    """
+    return _resolve(path.lstrip("/"))
 
 
 def init_assets(app: Flask) -> None:
     app.jinja_env.globals["asset_url"] = asset_url
+    app.jinja_env.globals["static_url"] = static_url
