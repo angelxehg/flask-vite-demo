@@ -22,15 +22,8 @@ COPY --from=frontend-build /app/src/flask_vite_demo/static/dist /
 
 FROM python:3.14-slim AS base
 
-# Kamal refuses to deploy an image whose `service` label does not match the
-# `service:` in its config, and it checks on every deploy with no way to skip.
-# Kamal sets this label itself when it builds; this image is built here and only
-# pulled there, so it has to be set here. It must stay in step with
-# config/flask-vite-demo/deploy.yml in the infra repository.
-LABEL service="flask-vite-demo"
-
 # Baked in at build time so a pushed image already knows where its own assets
-# live, with no runtime configuration required from Kamal/infra. Empty by
+# live, with no runtime configuration required from the deploy. Empty by
 # default: the app then falls back to serving its own bundled assets and the
 # CSP stays self-only, which is what local/dev use wants.
 ARG STATIC_URL
