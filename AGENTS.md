@@ -1,74 +1,80 @@
 # Agent Guidelines
 
-<!--
-  DELETE EACH COMMENT AS YOU FILL ITS SECTION IN, this one included. They do not
-  render, but they are not invisible: an agent reads the raw text and pays for
-  every line. A filled file is content only, never content plus scaffolding.
-
-  Keep this file short. It is loaded into every agent's context on every task, so
-  each line spends budget that could go to the guidelines that actually matter.
-  30-150 lines. Models reliably follow only ~150-200 instructions and the agent's
-  own system prompt already spends part of that budget, so a longer file does not
-  buy more coverage -- it dilutes what gets followed. Anything longer belongs in
-  README.md, docs/, or a skill.
-
-  Add a line when an agent demonstrably gets something wrong. Remove it when the
-  convention changes.
--->
-
 ## What this is
 
-<!--
-  Two or three sentences. What the project does and who uses it. Name the stack
-  and the entry point, not the whole dependency list -- an agent can read
-  package.json. Say what this project is NOT, if it is easy to confuse with a
-  neighbouring repo or service.
--->
+Flask + Vite integration demo: a Python 3.14 Flask app (`src/flask_vite_demo/`)
+serving server-rendered Jinja templates, styled and scripted by a Vite-built
+frontend (`frontend/`). The two are wired together at runtime, not build time —
+`core/assets.py` reads Vite's `manifest.json` to resolve hashed asset URLs. Ships
+as a single Docker image (`Dockerfile`), deployed behind CloudFront/S3 in
+production. It's a demo/reference project, not a framework — there's no plugin
+surface or public API to preserve compatibility for.
 
 ## Why it is built this way
 
-<!--
-  The decisions an agent would otherwise undo. Constraints that are not visible
-  in the code: a vendor limit, a migration half-finished, a workaround for an
-  upstream bug, a deliberate duplication. One line each, with the reason.
-
-  Name the architecture instead of describing it: "hexagonal ports/adapters",
-  "TDD -- test first, always", "event-driven, one handler per event". Explain it
-  once in docs/Architecture.md and link there.
--->
+- **Asset resolution is manifest-driven, not path-guessed.** `asset_url()` looks
+  up the built filename in Vite's `manifest.json` at request time, so hashed
+  filenames never need to be hardcoded. Files under `frontend/public/` bypass the
+  manifest entirely (Vite copies them verbatim) — use `static_url()` for those.
+- **`STATIC_URL` switches where assets are served from, and CSP follows it.**
+  Empty (local/test): Flask serves its own `static/dist`. A relative path (prod,
+  e.g. `/static`): same-origin, so CSP stays `'self'`-only. An absolute URL
+  (alternate CDN host): CSP grows exactly that origin+prefix, never a wildcard.
+  See `core/assets.py` and `core/csp.py`.
+- **Cache-Control is an explicit per-endpoint allowlist, not a header default.**
+  `core/cache.py`'s `CACHEABLE_ENDPOINTS` keys by endpoint *name*, not path, so a
+  renamed route silently drops out of the cache instead of silently staying in
+  it. Only `home` is cacheable today — the CD pipeline's IAM role holds no
+  `cloudfront:CreateInvalidation`, so a bad cached response can't be flushed and
+  has to age out on its own. HEAD must return the same `Cache-Control` as GET,
+  because CloudFront caches both.
+- **Hashed vs. unhashed assets get different cache lifetimes at deploy time.**
+  `.github/workflows/cd.yml` syncs `assets/` (content-hashed) as
+  `immutable, max-age=31536000` and everything else (including the index HTML)
+  as `max-age=3600`. A file only gets the long lifetime if Vite hashes it — see
+  `docs/Architecture.md`.
+- **Docker builds the frontend once, natively, regardless of target platform** —
+  JS/CSS output isn't architecture-specific, so a multi-arch image build doesn't
+  redo it per arch. A separate `FROM scratch AS assets` stage exists solely so CI
+  can extract just the built files for the S3 sync, without touching the shipped
+  image.
 
 ## How to build, test, and verify
 
-<!--
-  The exact commands, in the order a change must pass them. Include what "done"
-  looks like, and what is slow enough that an agent should not run it unasked
-  (e2e suites, deploys, anything that costs money).
--->
+Mirrors `.github/workflows/checks.yml`, in the order a change must pass:
 
 ```shell
-# install
-# build
-# test
-# lint / typecheck
+# frontend: install + build (required before Flask can serve real assets —
+# asset_url() raises KeyError against a missing/stale manifest)
+cd frontend && npm ci && npm run build
+
+# python: install (matches CI; drop --locked to let uv update the lock)
+uv sync --group dev --locked
+
+# lint (also: make lint)
+uv run black --check .
+uv run ruff check .
+
+# test (also: make test)
+uv run pytest
 ```
+
+`make format` applies `black` and `ruff --fix` in place. There is no
+typecheck/mypy step configured — don't invent one.
 
 ## Rules
 
-<!--
-  Prefer rules a linter, type checker, or test could enforce. A rule an agent
-  can check against is a rule that gets followed.
-
-    good: "React components are function components; no class components."
-    good: "Every exported function has a unit test in the sibling *.test.ts."
-    good: "No `any`. Use `unknown` and narrow."
-    bad:  "Write clean code."
-    bad:  "Follow best practices."
-
-  If a rule is already enforced by tooling, do not repeat it here -- point at
-  the config instead. This section is for what the tooling cannot catch.
--->
-
-- 
+- `frontend/` is excluded from `black`/`ruff` (`pyproject.toml`
+  `extend-exclude`) — it has its own toolchain and no linter configured yet.
+  Don't run the Python formatters against it or add one uninvited.
+- Python source lives under `src/flask_vite_demo/`; tests under `tests/`
+  (`pyproject.toml` `testpaths = ["tests"]`).
+- A new cacheable route needs an explicit addition to `CACHEABLE_ENDPOINTS` in
+  `src/flask_vite_demo/core/cache.py` — nothing is cacheable by default, and
+  that's deliberate (see Why above).
+- A new file under `frontend/public/` is served unhashed with only a 1-hour
+  cache lifetime. If it needs to change atomically or cache forever, it belongs
+  as a Vite-bundled asset (imported from `frontend/src/`) instead.
 
 ## Reference documents
 
