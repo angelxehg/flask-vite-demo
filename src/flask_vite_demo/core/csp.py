@@ -13,10 +13,18 @@ def _static_source() -> str | None:
     parts = urlsplit(static_url)
     if not parts.scheme or not parts.netloc:
         return None
-    # Keep the path (e.g. /flask-vite-demo/prod/) rather than trimming to the
-    # bare origin: static.angelxehg.com is a shared CDN for multiple apps'
-    # prefixes, and a trailing "/" makes CSP match it and anything beneath it,
-    # not the whole origin.
+    # Only reached when STATIC_URL names another host. In production it does not:
+    # assets are served from this application's own hostname under /static/, so
+    # STATIC_URL is the relative "/static", urlsplit finds no scheme and no
+    # netloc, and the policy stays 'self' -- which already covers same-origin
+    # requests. There is no CDN source to allow because there is no CDN origin.
+    #
+    # The absolute form still works, because a deployment that does put assets on
+    # a separate host is a configuration change rather than a code change. Keep
+    # the path (e.g. /flask-vite-demo/prod/) rather than trimming to the bare
+    # origin: a shared asset host serves several applications' prefixes, and a
+    # trailing "/" makes CSP match that prefix and anything beneath it rather
+    # than the whole origin.
     path = parts.path if parts.path.endswith("/") else parts.path + "/"
     return f"{parts.scheme}://{parts.netloc}{path}"
 

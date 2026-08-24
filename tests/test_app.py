@@ -127,3 +127,77 @@ def test_unknown_path_renders_the_sites_own_404(client):
     assert response.headers["Content-Security-Policy"] == (
         build_content_security_policy()
     )
+
+
+# The distribution in front of this application lets the origin decide what is
+# cacheable: its cache policy has a zero default TTL and a non-zero ceiling, so a
+# response with no Cache-Control is not cached and one asking for an hour gets an
+# hour. That makes these headers the whole of the edge caching configuration, and
+# nothing else would report them missing -- an uncached index is not an error.
+def test_index_is_cacheable_for_an_hour(client):
+    assert client.get("/").headers["Cache-Control"] == "public, max-age=3600"
+
+
+@pytest.mark.parametrize("path", ["/about", "/contact"])
+def test_other_pages_are_not_cached(client, path):
+    assert client.get(path).headers["Cache-Control"] == "no-store"
+
+
+def test_a_post_response_is_never_cached(client):
+    """Not that CloudFront would cache one -- only GET and HEAD are cached
+    methods -- but the header should not depend on that being true."""
+    response = client.post("/contact", data={"name": "Angel"})
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_the_error_page_is_not_cached(client):
+    """A cached 404 outlives whatever caused it, and the deploy that fixes the
+    route cannot invalidate it: no role holds cloudfront:CreateInvalidation."""
+    response = client.get("/no-such-page")
+    assert response.status_code == 404
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_the_favicon_redirect_is_not_cached(client):
+    assert client.get("/favicon.ico").headers["Cache-Control"] == "no-store"
+
+
+def test_a_cacheable_endpoint_returning_an_error_is_not_cached(monkeypatch):
+    """`home` is on the cacheable list, and the list is not the whole rule.
+
+    Caching a 500 from the index would be the worst version of this: the page
+    everyone lands on, wrong for an hour, with no way to flush it.
+    """
+    from flask_vite_demo.core.cache import cache_control_for
+
+    assert cache_control_for("home", "GET", 200) == "public, max-age=3600"
+    assert cache_control_for("home", "GET", 500) == "no-store"
+    assert cache_control_for("home", "POST", 200) == "no-store"
+    assert cache_control_for(None, "GET", 200) == "no-store"
+
+
+RELATIVE_STATIC = "/static"
+
+
+def test_assets_resolve_against_a_relative_static_url(client, monkeypatch):
+    """What production actually sets. The distribution routes /static/* to a
+    bucket, so these are same-origin with the page that references them."""
+    monkeypatch.setenv("STATIC_URL", RELATIVE_STATIC)
+    body = client.get("/").data
+    assert b'href="/static/favicon.svg"' in body
+    assert b'href="/static/assets/' in body
+
+
+def test_a_relative_static_url_leaves_the_policy_self_only(client, monkeypatch):
+    """The point of the move, expressed as a header.
+
+    A relative path has no scheme and no host, so there is no source to add --
+    and none is needed, because 'self' already covers same-origin. An absolute
+    STATIC_URL is what puts a host in the policy, and production no longer has
+    one.
+    """
+    monkeypatch.setenv("STATIC_URL", RELATIVE_STATIC)
+    policy = client.get("/").headers["Content-Security-Policy"]
+    for name in ("script-src", "style-src", "img-src", "connect-src"):
+        assert _directive(policy, name) == f"{name} 'self'"
+    assert "//" not in policy

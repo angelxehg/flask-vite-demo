@@ -24,7 +24,17 @@ def _load_manifest() -> dict:
 
 
 def _resolve(rel_path: str) -> str:
-    """Where a built file lives: the CDN when one is configured, else Flask."""
+    """Where a built file lives: STATIC_URL when set, else Flask's own static.
+
+    STATIC_URL is a relative "/static" in production, not a hostname. The
+    distribution in front of this application routes /static/* to a bucket, so
+    those files are same-origin with the pages that reference them -- which is
+    why nothing here or in core/csp.py has to know about CORS. An absolute URL
+    still works and still means "another host"; see core/csp.py.
+
+    Empty means neither, which is what local and test runs get: Flask serves the
+    build out of its own static directory.
+    """
     static_url = os.environ.get("STATIC_URL", "").strip()
     if static_url:
         return static_url.rstrip("/") + "/" + rel_path

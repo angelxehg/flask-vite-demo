@@ -48,10 +48,21 @@ jobs:
             --output type=local,dest=./frontend-dist \
             .
 
+      # This bucket sits behind the application's own CloudFront distribution,
+      # answering /static/* on the same hostname the pages are served from --
+      # which is why STATIC_URL is a relative path and why nothing here or in
+      # the application deals with CORS. AWS_S3_PREFIX is `static`, so it is
+      # also the Vite base path above and the STATIC_URL below: one value, three
+      # uses, which only holds because the distribution has no origin_path.
+      #
       # No CloudFront invalidation: the CD role has no permission to request
       # one, by design (see infra docs/Pipelines.md). Every asset filename under
       # assets/ is content-hashed, so a deploy publishes new keys instead of
-      # overwriting ones that might already be cached.
+      # overwriting ones that might already be cached. The index is the
+      # exception -- the application serves it with max-age=3600, so a deploy
+      # takes up to an hour to become visible. It does not break in the
+      # meantime: the sync does not delete, so the old page's assets are still
+      # there.
       #
       # Two syncs, because those two sentences are only true of assets/. Files
       # copied out of frontend/public/ keep their own names forever -- favicon.svg
