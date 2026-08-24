@@ -19,3 +19,11 @@ node_modules/
 
 # macOS
 .DS_Store
+
+# Agent config symlinks -- recreate with scripts/setup-agents.sh
+# The real files are AGENTS.md, skills/, and docs/; these are just aliases to them.
+/CLAUDE.md
+/.claude/skills
+/.codex/skills
+/.junie/guidelines.md
+/.junie/skills
