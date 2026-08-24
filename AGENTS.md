@@ -10,6 +10,14 @@ as a single Docker image (`Dockerfile`), deployed behind CloudFront/S3 in
 production. It's a demo/reference project, not a framework — there's no plugin
 surface or public API to preserve compatibility for.
 
+## Stack overview
+
+- Language: Python >=3.14 (backend), JavaScript (frontend, Vite-built)
+- Package manager: uv (Python), npm (frontend)
+- Framework(s): Flask 3.1, Vite 6
+- Key dependencies: gunicorn (WSGI server); black, ruff, pytest (Python dev group)
+- Entry point: `flask_vite_demo:main` (`src/flask_vite_demo/__init__.py`)
+
 ## Why it is built this way
 
 - **Asset resolution is manifest-driven, not path-guessed.** `asset_url()` looks
