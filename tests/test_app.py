@@ -201,3 +201,21 @@ def test_a_relative_static_url_leaves_the_policy_self_only(client, monkeypatch):
     for name in ("script-src", "style-src", "img-src", "connect-src"):
         assert _directive(policy, name) == f"{name} 'self'"
     assert "//" not in policy
+
+
+def test_head_and_get_agree_on_the_index(client):
+    """A HEAD must answer with the headers GET would, and CloudFront caches both.
+
+    When they disagree, `curl -I` reports something no browser ever sees -- which
+    is exactly how this was found: a HEAD that missed the edge cache returned
+    `no-store` from the origin while the cached GET said `max-age=3600`.
+    """
+    assert (
+        client.head("/").headers["Cache-Control"]
+        == client.get("/").headers["Cache-Control"]
+        == "public, max-age=3600"
+    )
+
+
+def test_head_of_an_uncacheable_page_is_still_uncacheable(client):
+    assert client.head("/about").headers["Cache-Control"] == "no-store"
