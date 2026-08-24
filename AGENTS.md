@@ -102,5 +102,5 @@ Read these when the task touches them, and keep them current as part of the chan
   `.claude/skills`, `.codex/skills`, and `.junie/skills` are symlinks to `skills/`.
   Edit `AGENTS.md` and `skills/` only. Never replace a symlink with a real file, and
   never write the same guidance into two of these paths -- it is one file.
-  Run `scripts/setup-agents.sh` — or `pwsh scripts/setup-agents.ps1` on Windows, which
-  needs Developer Mode on — to recreate the links after a fresh clone.
+  Run `uv run scripts/setup-agents.py` to recreate the links after a fresh clone —
+  on Windows this needs Developer Mode on (Settings > System > For developers).
