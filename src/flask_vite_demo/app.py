@@ -1,12 +1,13 @@
 from flask import Flask, redirect, render_template, request
 
-from flask_vite_demo.core import init_assets, init_csp
+from flask_vite_demo.core import init_assets, init_cache, init_csp
 from flask_vite_demo.core.assets import static_url
 
 
 def create_app() -> Flask:
     app = Flask(__name__)
     init_assets(app)
+    init_cache(app)
     init_csp(app)
 
     @app.route("/")
