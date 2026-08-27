@@ -6,8 +6,9 @@ Flask + Vite integration demo: a Python 3.14 Flask app (`src/flask_vite_demo/`)
 serving server-rendered Jinja templates, styled and scripted by a Vite-built
 frontend (`frontend/`). The two are wired together at runtime, not build time —
 `core/assets.py` reads Vite's `manifest.json` to resolve hashed asset URLs. Ships
-as a single Docker image (`Dockerfile`), deployed behind CloudFront/S3 in
-production. It's a demo/reference project, not a framework — there's no plugin
+as a single Docker image (`Dockerfile`); in production the container is reached
+directly and only its built assets sit behind CloudFront/S3, on a hostname of
+their own. It's a demo/reference project, not a framework — there's no plugin
 surface or public API to preserve compatibility for.
 
 ## Stack overview
@@ -34,8 +35,8 @@ surface or public API to preserve compatibility for.
   renamed route silently drops out of the cache instead of silently staying in
   it. Only `home` is cacheable today — the CD pipeline's IAM role holds no
   `cloudfront:CreateInvalidation`, so a bad cached response can't be flushed and
-  has to age out on its own. HEAD must return the same `Cache-Control` as GET,
-  because CloudFront caches both.
+  has to age out on its own. HEAD must return the same `Cache-Control` as GET:
+  nothing in front of the app enforces that, so a divergence is served as-is.
 - **Hashed vs. unhashed assets get different cache lifetimes at deploy time.**
   `.github/workflows/cd.yml` syncs `assets/` (content-hashed) as
   `immutable, max-age=31536000` and everything else (including the index HTML)

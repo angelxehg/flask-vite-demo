@@ -13,6 +13,14 @@ jobs:
   build-and-push:
     name: Build and Push
     runs-on: ubuntu-24.04-arm
+    # AWS_S3_BUCKET, AWS_S3_PREFIX and STATIC_URL are scoped to this environment
+    # rather than to the repository, so a job reads them only by naming the
+    # environment it deploys to. Declaring it also changes the OIDC subject claim
+    # from `...:ref:refs/heads/main` to `...:environment:prod` — the ref is not
+    # also present — which is why the CD role's trust policy lists both forms and
+    # why the environment carries a deployment branch policy pinning `main`.
+    # Removing this line breaks the credential step, not just the variables.
+    environment: prod
     # This repository is public, so its run logs are world-readable and `vars.*`
     # are printed verbatim — only `secrets.*` are redacted. The registry
     # hostname embeds the AWS account ID and is a secret; the repository path
@@ -38,31 +46,41 @@ jobs:
       # what the shipped image's manifest references — same build-args, same
       # content hashes. The manifest itself (.vite/*) stays out of the bucket:
       # it's only needed inside the image to resolve entry names to filenames.
+      #
+      # VITE_BASE_PATH is absolute, and it has to be. Vite writes this base into
+      # chunk-to-chunk imports and CSS url() references, so a relative `/static/`
+      # would send a lazily-loaded chunk at this application's own hostname —
+      # which serves nothing under /static. STATIC_URL already ends in the same
+      # prefix the sync below writes to, so appending a slash is the whole
+      # derivation.
       - name: Build frontend assets for CDN
         run: |
           docker buildx build \
             --target assets \
-            --build-arg VITE_BASE_PATH=/${{ vars.AWS_S3_PREFIX }}/ \
+            --build-arg VITE_BASE_PATH=${{ vars.STATIC_URL }}/ \
             --cache-from type=gha,scope=frontend-build \
             --cache-to type=gha,mode=max,scope=frontend-build \
             --output type=local,dest=./frontend-dist \
             .
 
-      # This bucket sits behind the application's own CloudFront distribution,
-      # answering /static/* on the same hostname the pages are served from --
-      # which is why STATIC_URL is a relative path and why nothing here or in
-      # the application deals with CORS. AWS_S3_PREFIX is `static`, so it is
-      # also the Vite base path above and the STATIC_URL below: one value, three
-      # uses, which only holds because the distribution has no origin_path.
+      # This bucket sits behind a CloudFront distribution on a hostname of its
+      # own, static.<app>.<domain>, which answers /static/* from here and
+      # /media/* from a second bucket. The assets are therefore cross-origin
+      # with the pages that load them: the distribution answers CORS for exactly
+      # this application's origin, and core/csp.py adds STATIC_URL to the policy
+      # because it is now an absolute URL. Neither is optional — a
+      # `<script type="module">` always fetches in CORS mode.
+      #
+      # AWS_S3_PREFIX is `static`, which is the key prefix here, the path pattern
+      # on the distribution, and the last segment of STATIC_URL: one value,
+      # three uses, which only holds because the distribution has no origin_path.
       #
       # No CloudFront invalidation: the CD role has no permission to request
       # one, by design (see infra docs/Pipelines.md). Every asset filename under
       # assets/ is content-hashed, so a deploy publishes new keys instead of
-      # overwriting ones that might already be cached. The index is the
-      # exception -- the application serves it with max-age=3600, so a deploy
-      # takes up to an hour to become visible. It does not break in the
-      # meantime: the sync does not delete, so the old page's assets are still
-      # there.
+      # overwriting ones that might already be cached. The rendered page is not
+      # in this bucket at all, so a deploy is visible as soon as the container is
+      # replaced.
       #
       # Two syncs, because those two sentences are only true of assets/. Files
       # copied out of frontend/public/ keep their own names forever -- favicon.svg
@@ -90,7 +108,7 @@ jobs:
           push: true
           build-args: |
             STATIC_URL=${{ vars.STATIC_URL }}
-            VITE_BASE_PATH=/${{ vars.AWS_S3_PREFIX }}/
+            VITE_BASE_PATH=${{ vars.STATIC_URL }}/
           cache-from: type=gha,scope=frontend-build
           cache-to: type=gha,mode=max,scope=frontend-build
           tags: |
@@ -107,6 +125,9 @@ jobs:
     name: Request Deploy
     needs: build-and-push
     runs-on: ubuntu-24.04-arm
+    # Same reason as the job above: this one assumes the same role, so it needs
+    # the same subject claim.
+    environment: prod
     permissions:
       id-token: write
       contents: read
